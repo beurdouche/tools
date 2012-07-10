@@ -1,0 +1,45 @@
+Plowshare GIT-snapshot installation notes.
+
+There are two ways to install Plowshare.
+
+For regular PC users
+====================
+
+$ sudo make install
+
+# For non root users, you can override default prefix (/usr/local)
+$ make install PREFIX=/home/$USER
+
+# If you are on a cross compilation environment:
+# (default prefix is /usr/local)
+$ make install DESTDIR=/media/rootfs
+or
+$ make install PREFIX=/opt DESTDIR=/media/rootfs
+
+Plowshare is also available for several Linux distribution
+(Debian, Ubuntu, Archlinux, Fedora, Gentoo, ...):
+Consult online documentation for up-to-date list:
+http://code.google.com/p/plowshare/wiki/Readme
+
+
+For restricted sytems (mostly NAS)
+==================================
+- busybox may be present instead of bash
+- GNU coreutils tools may not be complete
+
+# Default installation path: is /usr/local
+$ sudo bash setup.sh install
+
+# Or as non-root:
+$ PREFIX=$HOME bash setup.sh install
+
+Plowshare has been reported to work on:
+- Buffalo LinkStation Live (HS-DHxxxGL) (+ optware)
+- DealExtreme NAS WLX-652 (Snake OS firmware)
+- Fonera 2.0n (OpenWrt)
+- GuruPlug Server Plus (+ custom-built Ångstrom distribution)
+- Linksys NSLU2 (running SlugOS/BE 5.3)
+- Qnap TS-219 Turbo NAS
+- Western Digital WD TV Live (firmware 1.05.04_V_WDLXTV.COM_WDLXTV_LIVE-0.5.1.1 + optware)
+
+# vim: set fileencoding utf-8

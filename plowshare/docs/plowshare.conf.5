@@ -1,0 +1,125 @@
+.\" Copyright (c) 2010\-2012 Plowshare Team
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 3 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public
+.\" License along with this manual; if not, see
+.\" <http://www.gnu.org/licenses/>.
+.\" 
+.\" Based on:
+.\"   - xorg.conf.5
+.\"   - sysctl.conf.5
+
+.TH "plowshare.conf" "5" "April 9, 2012" "GPL" "Plowshare GIT-snapshot"
+
+.SH NAME
+plowshare.conf \- Configuration file for Plowshare
+
+.SH DESCRIPTION
+.B Plowshare
+(plowdown, plowup, plowdel or plowlist) uses a configuration file called 
+.I plowshare.conf
+for its initial setup. This configuration file is searched for in the following places when plowshare is started:
+.PP
+.RS 4
+.nf
+.I ~/.config/plowshare/plowshare.conf
+.I /etc/plowshare.conf
+.fi
+.RE
+.PP
+.I plowshare.conf
+file uses an INI-style format. It is composed of five sections which may be present in any order. Each section may contain lines of the form:
+.PP
+.RS 4
+.nf
+.B [General]
+.RI "    " token " " = " " value
+    ...
+.B [Plowdown]
+.RI "    " token " " = " " value
+    ...
+.B [Plowup]
+.RI "    " token " " = " " value
+    ...
+.B [Plowdel]
+.RI "    " token " " = " " value
+    ...
+.B [Plowlist]
+.RI "    " token " " = " " value
+    ...
+
+.B # this is a comment
+.fi
+.RE
+.PP
+Notes:
+.IP .
+Blank lines or lines beginning with a hash character ('#') are treated as comments and ignored.
+.IP .
+Whitespace before and after a \fItoken\fP or \fIvalue\fP is ignored (although a \fIvalue\fP can contain whitespace within).
+.IP .
+Double quoting \fIvalue\fP is optional.
+.PP
+Valid tokens are always lowercase.
+Names are long-option command-line arguments of plowshare. For example: \fItemp-directory\fP.
+For modules options, tokens are prepended by module name and a slash character. For example: \fIhotfile/auth\fP (short-option are also possible here).
+
+For values, no backslash interpretations is made. "\\t" is a regular string with two characters, it is not a tab character.
+
+Options in general section prevail over Plow* section. Options given on the command line prevail over configuration file options.
+
+.\" ****************************************************************************
+.\" * Example                                                                  *
+.\" ****************************************************************************
+.SH EXAMPLE
+.PP
+.nf
+###
+### Plowshare configuration file
+###
+
+[General]
+interface = eth1
+rapidshare/a = matt:4deadbeef
+hotfile/a = "matt:4 dead beef "
+
+[Plowdown]
+captchatrader=matt:blablabla
+timeout=3600
+
+[Plowup]
+max-retries=2
+printf=Download URL: %u%nDelete   URL: %d
+mirrorcreator/auth-free = foo:bar
+mirrorcreator/mediafire = yes
+
+[Plowlist]
+verbose = 3
+.fi
+
+.\" ****************************************************************************
+.\" * Authors / See Also                                                       *
+.\" ****************************************************************************
+.SH AUTHORS
+Plowshare was initially written by Arnau Sanchez. See the AUTHORS file for a list of some of the many other contributors.
+
+Plowshare is (C) 2010-2012 The Plowshare Team
+.SH "SEE ALSO"
+.BR plowdown (1),
+.BR plowup (1),
+.BR plowdel (1),
+.BR plowlist (1).

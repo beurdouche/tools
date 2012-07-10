@@ -1,0 +1,163 @@
+.\" Copyright (c) 2010\-2012 Plowshare Team
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 3 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public
+.\" License along with this manual; if not, see
+.\" <http://www.gnu.org/licenses/>.
+
+.TH "plowdel" "1" "May 31, 2012" "GPL" "Plowshare GIT-snapshot"
+
+.SH NAME
+plowdel \- Command-line link-deleter for file-sharing websites
+
+.SH SYNOPSIS
+.B plowdel
+[\fIOPTIONS\fP]...
+[\fIMODULE_OPTIONS\fP]...
+\fIURL\fP...
+
+.SH DESCRIPTION
+.B plowdel
+is a set of bash scripts designed for deleting files on file-sharing website.
+It acts like a web browser, retreiving pages and filling html forms.
+
+Currently supported hosting sites list is available in README file.
+
+Some sites may require authentication for deleting files.
+See specific module options below.
+
+.\" ****************************************************************************
+.\" * Options                                                                  *
+.\" ****************************************************************************
+.SH OPTIONS
+
+.SS Common options
+.TP
+.BI -i, " " --interface "=IFACE"
+If your machine has several network interfaces, force using \fIIFACE\fR interface.
+.TP
+.B "   " --no-plowsharerc
+Do not use local or global config file (plowshare.conf).
+.SS Logging options
+.TP
+.BI -v, " " --verbose "=LEVEL"
+Set output verbose level:
+.RS 
+\fB0\fR  none,
+.RE
+.RS 
+\fB1\fR  errors,
+.RE
+.RS
+\fB2\fR  notice (default behavior),
+.RE
+.RS
+\fB3\fR  debug,
+.RE
+.RS
+\fB4\fR  report (very noisy, log HTML pages).
+.RE
+.TP
+.B -q, --quiet
+Alias for \fB-v0\fR. Do not print any debug messages.
+.SS Generic program information
+.TP
+.B -h, --help
+Display this help and exit.
+.TP
+.B "   " --version
+Output version information and exit.
+
+.\" ****************************************************************************
+.\" * Modules options                                                          *
+.\" ****************************************************************************
+.SH "MODULE OPTIONS"
+
+.SS Common options
+.TP
+.BI -a, " " --auth "=USER:PASSWORD"
+Use premium account. Free account can be used sometimes.
+.P
+All switches are not implemented nor required for all modules.
+See help message for detailed modules option list.
+
+.\" ****************************************************************************
+.\" * Examples                                                                 *
+.\" ****************************************************************************
+.SH EXAMPLES
+
+.SS 1) Delete one or several files (using delete link)
+.nf
+$ plowdel http://oron.com/hymvzwi4mkk7?killcode=cmh5cer4s6
+.sp 1
+# Deletes are successive (not parallel)
+$ plowdel http://oron.com/hymvzwi4mkk7?killcode=cmh5cer4s6 http://depositfiles.com/rmv/1643181821669253
+.fi
+
+.\" ****************************************************************************
+.\" * Files                                                                    *
+.\" ****************************************************************************
+.SH "FILES"
+.TP
+.I ~/.config/plowshare/plowshare.conf
+This is the per-user configuration file. 
+.TP
+.I /etc/plowshare.conf
+Systemwide configuration file.
+.PP
+The file format is described in
+.BR plowshare.conf (5).
+
+.\" ****************************************************************************
+.\" * Exit codes                                                               *
+.\" ****************************************************************************
+.SH "EXIT CODES"
+
+Possible exit codes are:
+.IP 0
+Success. File was successfully deleted.
+.IP 1
+Fatal error. Upstream site updated or unexpected result.
+.IP 2
+No available module (provided URL is not supported).
+.IP 3
+Network error. Mostly curl related.
+.IP 4
+Authentication failed (bad login/password).
+.IP 12
+Authentication required (anonymous users can't delete files).
+.IP 13
+Link is dead. File has been previously deleted.
+.IP 15
+Unknown command line parameter or incompatible options.
+.PP
+If
+.B plowdel
+is invoked with multiple links and one or several errors occur, the first error code is returned added with 100.
+
+.\" ****************************************************************************
+.\" * Authors / See Also                                                       *
+.\" ****************************************************************************
+.SH AUTHORS
+Plowshare was initially written by Arnau Sanchez. See the AUTHORS file for a list of some of the many other contributors.
+
+Plowshare is (C) 2010-2012 The Plowshare Team
+.SH "SEE ALSO"
+.BR plowdown (1),
+.BR plowup (1),
+.BR plowlist (1),
+.BR plowshare.conf (5).
