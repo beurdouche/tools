@@ -37,8 +37,9 @@ Currently it supports the following modules:
   - smtp_vrfy     : Enumerate valid users using the SMTP 'VRFY' command
   - smtp_rcpt     : Enumerate valid users using the SMTP 'RCPT TO' command
   - finger_lookup : Enumerate valid users using Finger
-  - http_fuzz     : Brute-force HTTP/HTTPS
-  - pop_passd     : Brute-force poppassd (not POP3)
+  - http_fuzz     : Brute-force HTTP
+  - pop_login     : Brute-force POP3
+  - pop_passd     : Brute-force poppassd (http://netwinsite.com/poppassd/)
   - ldap_login    : Brute-force LDAP
   - smb_login     : Brute-force SMB
   - smb_lookupsid : Brute-force SMB SID-lookup
@@ -58,17 +59,16 @@ Currently it supports the following modules:
 Future modules to be implemented:
   - rdp_login
   - vmware_login (902/tcp)
-  - pop3_login
 
 The name "Patator" comes from http://www.youtube.com/watch?v=xoBkBvnTTjo
-"Whatever the payload to fire, always use the same launch tube"
+"Whatever the payload to fire, always use the same cannon"
 
 * Why ?
 
-Basically, I got tired of using Medusa, Hydra, ncrack, metasploit auxiliary modules, nmap NSE scripts and the like because:
+Basically, I got tired of using Medusa, Hydra, Ncrack, Metasploit auxiliary modules, Nmap NSE scripts and the like because:
   - they either do not work or are not reliable (got me false negatives several times in the past)
-  - they are slow (not multi-threaded or not testing multiple passwords within the same TCP connection)
-  - they lack very useful features that are easy to code in python (eg. interactive runtime)
+  - they are not flexible enough (how to iterate over all wordlists, fuzz any module parameter)
+  - they lack useful features (display progress or pause during execution)
 
 
 FEATURES
@@ -95,12 +95,12 @@ FEATURES
   * Multi-threaded
 
   * Flexible user input
-    - Any part of a payload is fuzzable:
+    - Any module parameter can be fuzzed:
       + use FILE[0-9] keywords to iterate on a file
       + use COMBO[0-9] keywords to iterate on the combo entries of a file
       + use NET[0-9] keywords to iterate on every host of a network subnet
 
-    - Iteration over the joined wordlists may be done in any order
+    - Iteration over the joined wordlists can be done in any order
 
   * Save every response (along with request) to seperate log files for later reviewing
 
@@ -138,9 +138,9 @@ IPy              | NETx keywords  | https://github.com/haypo/python-ipy         
 --------------------------------------------------------------------------------------------------
 unzip            | ZIP passwords  | http://www.info-zip.org/                           |     6.0 |
 --------------------------------------------------------------------------------------------------
-Java             | keystore files | http://www.oracle.com/technetwork/java/javase/     |    6u29 |
+Java             | keystore files | http://www.oracle.com/technetwork/java/javase/     |       6 |
 --------------------------------------------------------------------------------------------------
-python           |                | http://www.python.org/                             |   2.6.6 |
+python           |                | http://www.python.org/                             |     2.7 |
 --------------------------------------------------------------------------------------------------
 
 * Shortcuts (optionnal)
@@ -178,16 +178,16 @@ For instance, this would be the classic order:
 10.0.0.1 root 123456
 10.0.0.1 root qsdfghj
 ....
-10.0.0.1 test password
-10.0.0.1 test 123456
-10.0.0.1 test qsdfghj
+10.0.0.1 admin password
+10.0.0.1 admin 123456
+10.0.0.1 admin qsdfghj
 ...
 10.0.0.2 root password
 ...
 
 While a smarter way might be:
 ---------
-./module host=FILE2 password=FILE1 user=FILE0 0=logins.txt 1=passwords.txt 2=hosts.txt 
+./module host=FILE2 user=FILE1 password=FILE0 2=hosts.txt 1=logins.txt 0=passwords.txt
 10.0.0.1 root password
 10.0.0.2 root password
 10.0.0.1 admin password
@@ -313,7 +313,7 @@ smtp_rcpt host=10.0.0.1 user=FILE0@localhost 0=logins.txt helo='ehlo mx.fb.com' 
 
 
 * Brute-force authentication.
-  (a) Send a fake hostname (by default the real hostname is sent)
+  (a) Send a fake hostname (by default your host fqdn is sent)
 ------------             (a)
 smtp_login host=10.0.0.1 helo='ehlo its.me.com' user=FILE0@dom.com password=FILE1 0=logins.txt 1=passwords.txt 
 
@@ -485,13 +485,6 @@ vnc_login host=10.0.0.1 password=FILE0 0=passwords.txt --threads 1
  -x retry:fgrep!='Authentication failure' --max-retries -1 -x quit:code=0
         (b)                                 (b)                 (c)
 }}}
-{{{ Unzip
-
-* Brute-force the ZIP file password (cracking older pkzip encryption used to be not supported in JtR).
-----------
-unzip_pass zipfile=path/to/file.zip password=FILE0 0=passwords.txt -x ignore:code!=0
-
-}}}
 {{{ DNS
 
 * Brute-force subdomains.
@@ -538,6 +531,13 @@ NB0. If you get "notInTimeWindow" error messages, increase the retries option.
 NB1. SNMPv3 requires passphrases to be at least 8 characters long.
 
 }}}
+{{{ Unzip
+
+* Brute-force the ZIP file password (cracking older pkzip encryption used to be not supported in JtR).
+----------
+unzip_pass zipfile=path/to/file.zip password=FILE0 0=passwords.txt -x ignore:code!=0
+
+}}}
 
 CHANGELOG
 ---------
@@ -556,7 +556,6 @@ CHANGELOG
 
 TODO
 ----
-  * SSL support for SMTP, MySQL, ... (use socat in the meantime)
   * new option -e ns like in Medusa (not likely to be implemented due to design)
   * replace dnspython|paramiko|IPy with a better module (scapy|libssh2|... ?)
   * rewrite itertools.product that eats too much memory when processing large wordlists
@@ -566,25 +565,25 @@ TODO
 
 # logging {{{
 import logging
-class MyFormatter(logging.Formatter):
+class MyLoggingFormatter(logging.Formatter):
 
   dft_fmt = '%(asctime)s %(name)-7s %(levelname)7s - %(message)s'
   dbg_fmt = '%(asctime)s %(name)-7s %(levelname)7s [%(threadName)s] %(message)s'
 
   def __init__(self):
-    logging.Formatter.__init__(self, MyFormatter.dft_fmt, datefmt='%H:%M:%S')
+    logging.Formatter.__init__(self, MyLoggingFormatter.dft_fmt, datefmt='%H:%M:%S')
 
 
   def format(self, record):
       if record.levelno == 10:   # DEBUG
-          self._fmt = MyFormatter.dbg_fmt
+          self._fmt = MyLoggingFormatter.dbg_fmt
       else:
-          self._fmt = MyFormatter.dft_fmt
+          self._fmt = MyLoggingFormatter.dft_fmt
 
       return logging.Formatter.format(self, record)
 
 handler = logging.StreamHandler()
-handler.setFormatter(MyFormatter())
+handler.setFormatter(MyLoggingFormatter())
 logger = logging.getLogger('patator')
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
@@ -730,7 +729,7 @@ class Controller:
     from optparse import OptionGroup
     from optparse import IndentedHelpFormatter
 
-    class MyFormatter(IndentedHelpFormatter):
+    class MyHelpFormatter(IndentedHelpFormatter):
       def format_epilog(self, epilog):
         return epilog
 
@@ -793,7 +792,7 @@ For example, to encode every password in base64:
 Please read the README inside for more examples and usage information.
 '''
 
-    parser = OptionParser(usage=usage, prog=name, epilog=epilog, version=__banner__, formatter=MyFormatter())
+    parser = OptionParser(usage=usage, prog=name, epilog=epilog, version=__banner__, formatter=MyHelpFormatter())
 
     exe_grp = OptionGroup(parser, 'Execution')
     exe_grp.add_option('-x', dest='actions', action='append', default=[], metavar='arg', help='actions and conditions, see Syntax below')
@@ -862,7 +861,7 @@ Please read the README inside for more examples and usage information.
 
     wlists = {}
     kargs = []
-    for arg in args: # ('host=NET0', '0=10.0.0.0/24', 'user=COMBO10', 'password=COMBO11', '1=combos.txt', 'domain=google.MOD2', '2=TLD')
+    for arg in args: # ('host=NET0', '0=10.0.0.0/24', 'user=COMBO10', 'password=COMBO11', '1=combos.txt', 'name=google.MOD2', '2=TLD')
       for k, v in self.expand_key(arg):
         logger.debug('k: %s, v: %s' % (k, v))
 
@@ -920,7 +919,7 @@ Please read the README inside for more examples and usage information.
             else:
               self.payload[k] = v
 
-    logger.debug('iter_keys: %s' % self.iter_keys) # { 0: ('NET', '10.0.0.0/24', ['host']), 1: ('COMBO', 'combos.txt', [(0, 'user'), (1, 'password')]), 2: ('MOD', 'TLD', ['domain'])
+    logger.debug('iter_keys: %s' % self.iter_keys) # { 0: ('NET', '10.0.0.0/24', ['host']), 1: ('COMBO', 'combos.txt', [(0, 'user'), (1, 'password')]), 2: ('MOD', 'TLD', ['name'])
     logger.debug('enc_keys: %s' % self.enc_keys) # [('password', 'ENC', hexlify), ('header', 'B64', b64encode), ...
     logger.debug('payload: %s' % self.payload)
 
@@ -943,7 +942,7 @@ Please read the README inside for more examples and usage information.
         f.write('$ %s\n' % ' '.join(argv))
 
       handler = logging.FileHandler(log_file)
-      handler.setFormatter(formatter)
+      handler.setFormatter(MyLoggingFormatter())
       logging.getLogger('patator').addHandler(handler)
     
   def update_actions(self, arg): 
@@ -1469,11 +1468,11 @@ class TCP_Cache:
     for _, c in self.cache.items():
       c.close()
 
-  def bind(self, *args):
-
+  def bind(self, *args, **kwargs):
+    # *args identify one connection in the cache while **kwargs are only options
     key = ':'.join(args)
     if key not in self.cache:
-      self.conn = self.cache[key] = self.connect(*args)
+      self.conn = self.cache[key] = self.connect(*args, **kwargs)
     else:
       self.conn = self.cache[key]
 
@@ -1493,8 +1492,13 @@ class TCP_Cache:
 
 # FTP {{{
 from ftplib import FTP, Error as FTP_Error
+try:
+  from ftplib import FTP_TLS # New in python 2.7
+except ImportError:
+  logger.warn('TLS support to FTP was implemented in python 2.7')
+
 class FTP_login(TCP_Cache):
-  '''Brute-force FTP authentication'''
+  '''Brute-force FTP'''
 
   usage_hints = (
     """%prog host=10.0.0.1 user=FILE0 password=FILE1 0=logins.txt 1=passwords.txt"""
@@ -1506,21 +1510,27 @@ class FTP_login(TCP_Cache):
     ('port', 'ports to target [21]'),
     ('user', 'usernames to test'),
     ('password', 'passwords to test'),
+    ('tls', 'use TLS [0|1]'),
     ('timeout', 'seconds to wait for a response [10]'),
     )
   available_options += TCP_Cache.available_options
 
   Response = Response_Base
 
-  def connect(self, host, port):
-    fp = FTP(timeout=int(self.timeout))
+  def connect(self, host, port, tls, timeout):
+
+    if tls == '0':
+      fp = FTP(timeout=int(timeout))
+    else:
+      fp = FTP_TLS(timeout=int(timeout))
+
     banner = fp.connect(host, int(port))
 
     return TCP_Connection(fp, banner)
 
-  def execute(self, host, port='21', user=None, password=None, timeout='10', persistent='1'):
-    self.timeout = timeout
-    fp, resp = self.bind(host, port)
+  def execute(self, host, port='21', tls='0', user=None, password=None, timeout='10', persistent='1'):
+
+    fp, resp = self.bind(host, port, tls, timeout=timeout)
 
     try:
       if user is not None:
@@ -1620,7 +1630,7 @@ class SSH_Cache(TCP_Cache):
       self.conn = None
 
 class SSH_login(SSH_Cache):
-  '''Brute-force SSH authentication'''
+  '''Brute-force SSH'''
 
   usage_hints = (
     """%prog host=10.0.0.1 user=root password=FILE0 0=passwords.txt -x ignore:mesg='Authentication failed.'""",
@@ -1678,7 +1688,7 @@ class SSH_login(SSH_Cache):
 # Telnet {{{
 from telnetlib import Telnet
 class Telnet_login(TCP_Cache):
-  '''Brute-force Telnet authentication'''
+  '''Brute-force Telnet'''
 
   usage_hints = (
     """%prog host=10.0.0.1 inputs='FILE0\\nFILE1' 0=logins.txt 1=passwords.txt persistent=0"""
@@ -1690,21 +1700,22 @@ class Telnet_login(TCP_Cache):
     ('port', 'ports to target [23]'),
     ('inputs', 'list of values to input'),
     ('prompt_re', 'regular expression to match prompts [\w+]'),
-    ('timeout', 'seconds to wait for prompt_re to match received data [20]'),
+    ('timeout', 'seconds to wait for a response and for prompt_re to match received data [20]'),
     )
   available_options += TCP_Cache.available_options
 
   Response = Response_Base
 
-  def connect(self, host, port):
+  def connect(self, host, port, timeout):
     self.prompt_count = 0
-    fp = Telnet(host, int(port))
+    fp = Telnet(host, int(port), int(timeout))
 
     return TCP_Connection(fp)
 
   def execute(self, host, port='23', inputs=None, prompt_re='\w+:', timeout='20', persistent='1'):
 
-    fp, _ = self.bind(host, port)
+    fp, _ = self.bind(host, port, timeout=timeout)
+
     trace = ''
     timeout = int(timeout)
 
@@ -1735,21 +1746,31 @@ class Telnet_login(TCP_Cache):
 # }}}
 
 # SMTP {{{
-from smtplib import SMTP, SMTPAuthenticationError, SMTPHeloError, SMTPException
+from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPHeloError, SMTPException
 class SMTP_Base(TCP_Cache):
 
   available_options = TCP_Cache.available_options
   available_options += (
+    ('timeout', 'seconds to wait for a response [10]'),
     ('host', 'hostnames or subnets to target'),
     ('port', 'ports to target [25]'),
-    ('helo', 'first command to send after connect [None]'),
+    ('ssl', 'use SSL [0|1]'),
+    ('helo', 'helo or ehlo command to send after connect [skip]'),
+    ('starttls', 'send STARTTLS [0|1]'),
     ('user', 'usernames to test'),
     )
 
   Response = Response_Base
 
-  def connect(self, host, port, helo):
-    fp = SMTP()
+  def connect(self, host, port, ssl, helo, starttls, timeout):
+
+    if ssl == '0':
+      if not port: port = 25
+      fp = SMTP(timeout=int(timeout))
+    else:
+      if not port: port = 465
+      fp = SMTP_SSL(timeout=int(timeout))
+
     resp = fp.connect(host, int(port))
 
     if helo:
@@ -1759,6 +1780,9 @@ class SMTP_Base(TCP_Cache):
         resp = fp.ehlo(name)
       else:
         resp = fp.helo(name)
+
+    if not starttls == '0':
+      resp = fp.starttls()
 
     return TCP_Connection(fp, resp)
     
@@ -1771,9 +1795,9 @@ class SMTP_vrfy(SMTP_Base):
     ''' -x ignore:fgrep='User unknown' -x ignore,reset,retry:code=421''',
     )
 
-  def execute(self, host, port='25', helo='', user=None, persistent='1'):
+  def execute(self, host, port='', ssl='0', helo='', starttls='0', user=None, timeout='10', persistent='1'):
 
-    fp, resp = self.bind(host, port, helo)
+    fp, resp = self.bind(host, port, ssl, helo, starttls, timeout=timeout)
 
     if user is not None:
       resp = fp.verify(user)
@@ -1798,9 +1822,9 @@ class SMTP_rcpt(SMTP_Base):
     ('mail_from', 'sender email [test@example.org]'),
     )
 
-  def execute(self, host, port='25', helo='', mail_from='test@example.org', user=None, persistent='1'):
+  def execute(self, host, port='', ssl='0', helo='', starttls='0', mail_from='test@example.org', user=None, timeout='10', persistent='1'):
 
-    fp, resp = self.bind(host, port, helo)
+    fp, resp = self.bind(host, port, ssl, helo, starttls, timeout=timeout)
 
     if mail_from:
       resp = fp.mail(mail_from)
@@ -1818,7 +1842,7 @@ class SMTP_rcpt(SMTP_Base):
 
 
 class SMTP_login(SMTP_Base):
-  '''Brute-force SMTP authentication'''
+  '''Brute-force SMTP'''
 
   usage_hints = (
     '''%prog host=10.0.0.1 user=f.bar@dom.com password=FILE0 0=passwords.txt [helo='ehlo its.me.com']'''
@@ -1830,9 +1854,9 @@ class SMTP_login(SMTP_Base):
     ('password', 'passwords to test'),
     )
 
-  def execute(self, host, port='25', helo=None, user=None, password=None, persistent='1'):
+  def execute(self, host, port='', ssl='0', helo='', starttls='0', user=None, password=None, timeout='10', persistent='1'):
 
-    fp, resp = self.bind(host, port, helo)
+    fp, resp = self.bind(host, port, ssl, helo, starttls, timeout=timeout)
     
     try:
       if user is not None and password is not None:
@@ -1920,7 +1944,7 @@ if not which('ldapsearch'):
 # I chose to wrap around ldapsearch with "-e ppolicy".
 
 class LDAP_login:
-  '''Brute-force LDAP authentication'''
+  '''Brute-force LDAP'''
 
   usage_hints = (
     """%prog host=10.0.0.1 binddn='cn=Directory Manager' bindpw=FILE0 0=passwords.txt"""
@@ -1967,7 +1991,7 @@ class SMB_Connection(TCP_Connection):
     self.fp.get_socket().close()
 
 class SMB_login(TCP_Cache):
-  '''Brute-force SMB authentication'''
+  '''Brute-force SMB'''
 
   usage_hints = (
     """%prog host=10.0.0.1 user=FILE0 password=FILE1 0=logins.txt 1=passwords.txt"""
@@ -2119,6 +2143,64 @@ class SMB_lookupsid(TCP_Cache):
 # }}}
 
 # POP {{{
+from poplib import POP3, POP3_SSL, error_proto as pop_error
+class POP_Connection(TCP_Connection):
+  def close(self):
+    self.fp.quit()
+
+class POP_login(TCP_Cache):
+  '''Brute-force POP3'''
+
+  usage_hints = (
+    '''%prog host=10.0.0.1 user=FILE0 password=FILE1 0=logins.txt 1=passwords.txt -x ignore:code=-ERR''',
+    )
+
+  available_options = (
+    ('host', 'hostnames or subnets to target'),
+    ('port', 'ports to target [110]'),
+    ('user', 'usernames to test'),
+    ('password', 'passwords to test'),
+    ('ssl', 'use SSL [0|1]'),
+    ('timeout', 'seconds to wait for a response [10]'),
+    )
+  available_options += TCP_Cache.available_options
+
+  Response = Response_Base
+
+  def connect(self, host, port, ssl, timeout):
+    if ssl == '0':
+      if not port: port = 110
+      fp = POP3(host, int(port), timeout=int(timeout))
+    else:
+      if not port: port = 995
+      fp = POP3_SSL(host, int(port), timeout=int(timeout)) # timeout was New in python 2.7
+
+    return POP_Connection(fp, fp.welcome)
+
+  def execute(self, host, port='', ssl='0', user=None, password=None, timeout='10', persistent='1'):
+
+    fp, resp = self.bind(host, port, ssl, timeout=timeout)
+
+    try:
+      if user is not None:
+        resp = fp.user(user)
+      if password is not None:
+        resp = fp.pass_(password)
+
+      logger.debug('No error: %s' % resp)
+      self.reset()
+
+    except pop_error as e:
+      logger.debug('pop_error: %s' % e)
+      resp = str(e)
+
+    if persistent == '0':
+      self.reset()
+
+    code, mesg = resp.split(' ', 1)
+    return self.Response(code, mesg)
+
+
 class Passd_Error(Exception): pass
 class Passd:
   def connect(self, host, port):
@@ -2151,7 +2233,7 @@ class Passd:
     return code, mesg
 
 class POP_passd:
-  '''Brute-force poppassd authentication (http://netwinsite.com/poppassd/ not POP3)'''
+  '''Brute-force poppassd (http://netwinsite.com/poppassd/)'''
 
   usage_hints = (
     '''%prog host=10.0.0.1 user=FILE0 password=FILE1 0=logins.txt 1=passwords.txt -x ignore:code=500''',
@@ -2203,7 +2285,7 @@ except ImportError:
   warnings.append('mysql-python')
 
 class MySQL_login:
-  '''Brute-force MySQL authentication'''
+  '''Brute-force MySQL'''
 
   usage_hints = (
     """%prog host=10.0.0.1 user=FILE0 password=FILE1 0=logins.txt 1=passwords.txt -x ignore:fgrep='Access denied for user'""",
@@ -2305,7 +2387,7 @@ class MSSQL:
     raise Exception('Failed to parse response')
 
 class MSSQL_login:
-  '''Brute-force MSSQL authentication'''
+  '''Brute-force MSSQL'''
 
   usage_hints = (
     """%prog host=10.0.0.1 user=sa password=FILE0 0=passwords.txt -x ignore:fgrep='Login failed for user'""",
@@ -2337,7 +2419,7 @@ except ImportError:
   warnings.append('cx_Oracle')
 
 class Oracle_login:
-  '''Brute-force Oracle authentication'''
+  '''Brute-force Oracle'''
 
   usage_hints = (
     """%prog host=10.0.0.1 sid=FILE0 0=sids.txt -x ignore:code=ORA-12505""",
@@ -2375,7 +2457,7 @@ except ImportError:
   warnings.append('psycopg')
 
 class Pgsql_login:
-  '''Brute-force PostgreSQL authentication'''
+  '''Brute-force PostgreSQL'''
 
   usage_hints = (
     """%prog host=10.0.0.1 user=postgres password=FILE0 0=passwords.txt -x ignore:fgrep='password authentication failed for user'""",
@@ -2464,7 +2546,7 @@ class Response_HTTP(Response_Base):
     )
 
 class HTTP_fuzz(TCP_Cache):
-  '''Fuzz HTTP/HTTPS'''
+  '''Brute-force HTTP'''
 
   usage_hints = [
     """%prog url=http://10.0.0.1/FILE0 0=paths.txt -x ignore:code=404 -x ignore,retry:code=500""",
@@ -2736,7 +2818,7 @@ class VNC:
 
 
 class VNC_login:
-  '''Brute-force VNC authentication'''
+  '''Brute-force VNC'''
 
   usage_hints = (
     """%prog host=10.0.0.1 password=FILE0 0=passwords.txt -t 1 -x retry:fgrep!='Authentication failure' --max-retries -1 -x quit:code=0""",
@@ -3082,7 +3164,7 @@ except ImportError:
   warnings.append('pysnmp')
 
 class SNMP_login:
-  '''Brute-force SNMP v1/2/3 authentication'''
+  '''Brute-force SNMP v1/2/3'''
 
   usage_hints = (
     """%prog host=10.0.0.1 version=2 community=FILE0 1=names.txt -x ignore:mesg='No SNMP response received before timeout'""",
@@ -3217,6 +3299,7 @@ modules = [
   ('smtp_rcpt', (Controller, SMTP_rcpt)),
   ('finger_lookup', (Controller_Finger, Finger_lookup)),
   ('http_fuzz', (Controller_HTTP, HTTP_fuzz)),
+  ('pop_login', (Controller, POP_login)),
   ('pop_passd', (Controller, POP_passd)),
   ('ldap_login', (Controller, LDAP_login)),
   ('smb_login', (Controller, SMB_login)),
@@ -3237,19 +3320,20 @@ modules = [
   ]
 
 dependencies = {
-  'paramiko': [('ssh_login',), 'http://www.lag.net/paramiko/'],
-  'pycurl': [('http_fuzz',), 'http://pycurl.sourceforge.net/'],
-  'openldap': [('ldap_login',), 'http://www.openldap.org/'],
-  'impacket': [('smb_login','smb_lookupsid'), 'http://oss.coresecurity.com/projects/impacket.html'],
-  'cx_Oracle': [('oracle_login',), 'http://cx-oracle.sourceforge.net/'],
-  'mysql-python': [('mysql_login',), 'http://sourceforge.net/projects/mysql-python/'],
-  'psycopg': [('pgsql_login',), 'http://initd.org/psycopg/'],
-  'pycrypto': [('vnc_login',), 'http://www.dlitz.net/software/pycrypto/'],
-  'dnspython': [('dns_reverse', 'dns_forward'), 'http://www.dnspython.org/'],
-  'IPy': [('dns_reverse', 'dns_forward'), 'https://github.com/haypo/python-ipy'],
-  'pysnmp': [('snmp_login',), 'http://pysnmp.sf.net/'],
-  'unzip': [('unzip_pass',), 'http://www.info-zip.org/'],
-  'java': [('keystore_pass',), 'http://www.oracle.com/technetwork/java/javase/'],
+  'paramiko': [('ssh_login',), 'http://www.lag.net/paramiko/', '1.7.7.1'],
+  'pycurl': [('http_fuzz',), 'http://pycurl.sourceforge.net/', '7.19.0'],
+  'openldap': [('ldap_login',), 'http://www.openldap.org/', '2.4.24'],
+  'impacket': [('smb_login','smb_lookupsid'), 'http://oss.coresecurity.com/projects/impacket.html', 'svn#414'],
+  'cx_Oracle': [('oracle_login',), 'http://cx-oracle.sourceforge.net/', '5.1.1'],
+  'mysql-python': [('mysql_login',), 'http://sourceforge.net/projects/mysql-python/', '1.2.3'],
+  'psycopg': [('pgsql_login',), 'http://initd.org/psycopg/', '2.4.5'],
+  'pycrypto': [('vnc_login',), 'http://www.dlitz.net/software/pycrypto/', '2.3'],
+  'dnspython': [('dns_reverse', 'dns_forward'), 'http://www.dnspython.org/', '1.10.0'],
+  'IPy': [('dns_reverse', 'dns_forward'), 'https://github.com/haypo/python-ipy', '0.75'],
+  'pysnmp': [('snmp_login',), 'http://pysnmp.sf.net/', '4.2.1'],
+  'unzip': [('unzip_pass',), 'http://www.info-zip.org/', '6.0'],
+  'java': [('keystore_pass',), 'http://www.oracle.com/technetwork/java/javase/', '6'],
+  'python': [('ftp_login',), 'http://www.python.org/', '2.7'],
   }
 # }}}
 
@@ -3283,9 +3367,9 @@ Available modules:
   # dependencies
   abort = False
   for w in warnings:
-    mods, url = dependencies[w]
+    mods, url, ver = dependencies[w]
     if name in mods:
-      print('ERROR: %s (%s) is required to run %s.' % (w, url, name))
+      print('ERROR: %s %s (%s) is required to run %s.' % (w, ver, url, name))
       abort = True
 
   if abort:
