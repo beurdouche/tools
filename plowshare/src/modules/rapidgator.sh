@@ -21,13 +21,13 @@
 MODULE_RAPIDGATOR_REGEXP_URL="http://\(www\.\)\?rapidgator\.net/"
 
 MODULE_RAPIDGATOR_DOWNLOAD_OPTIONS="
-AUTH,a:,auth:,EMAIL:PASSWORD,User account"
+AUTH,a,auth,a=EMAIL:PASSWORD,User account"
 MODULE_RAPIDGATOR_DOWNLOAD_RESUME=yes
 MODULE_RAPIDGATOR_DOWNLOAD_FINAL_LINK_NEEDS_COOKIE=no
 
 MODULE_RAPIDGATOR_UPLOAD_OPTIONS="
-AUTH,a:,auth:,EMAIL:PASSWORD,User account
-FOLDER,,folder:,FOLDER,Folder to upload files into (account only)
+AUTH,a,auth,a=EMAIL:PASSWORD,User account
+FOLDER,,folder,s=FOLDER,Folder to upload files into (account only)
 ASYNC,,async,,Asynchronous remote upload (only start upload, don't wait for link)
 CLEAR,,clear,,Clear list of remote uploads"
 MODULE_RAPIDGATOR_UPLOAD_REMOTE_SUPPORT=yes
@@ -137,8 +137,6 @@ rapidgator_num_remote() {
 # stdout: real file download link
 #         file name
 rapidgator_download() {
-    eval "$(process_options rapidgator "$MODULE_RAPIDGATOR_DOWNLOAD_OPTIONS" "$@")"
-
     local -r COOKIE_FILE=$1
     local -r URL=$2
     local -r BASE_URL='http://rapidgator.net'
@@ -204,6 +202,12 @@ rapidgator_download() {
         echo $(( ((23 - ((HOUR + 4) % 24) ) * 60 + (61 - MIN)) * 60 ))
         return $ERR_LINK_TEMP_UNAVAILABLE
 
+    # You have reached your hourly downloads limit. Please, try again later.
+    elif match 'reached your hourly downloads limit' "$HTML"; then
+        log_error 'Hourly limit reached.'
+        echo 3600
+        return $ERR_LINK_TEMP_UNAVAILABLE
+
     # You can`t download not more than 1 file at a time in free mode.
     elif match 'download not more than .\+ in free mode' "$HTML"; then
         log_error 'No parallel download allowed.'
@@ -211,7 +215,9 @@ rapidgator_download() {
         return $ERR_LINK_TEMP_UNAVAILABLE
 
     # You can download files up to 500 MB in free mode.
-    elif match 'download files up to .\+ in free mode'  "$HTML"; then
+    # This file can be downloaded by premium only
+    elif match 'download files up to .\+ in free mode' "$HTML" || \
+        match 'can be downloaded by premium only' "$HTML"; then
         return $ERR_LINK_NEED_PERMISSIONS
 
     # Delay between downloads must be not less than 15 min.
@@ -342,8 +348,6 @@ rapidgator_download() {
 # stdout: download link
 #         delete link
 rapidgator_upload() {
-    eval "$(process_options rapidgator "$MODULE_RAPIDGATOR_UPLOAD_OPTIONS" "$@")"
-
     local -r COOKIE_FILE=$1
     local -r FILE=$2
     local -r DEST_FILE=$3
@@ -580,8 +584,6 @@ rapidgator_upload() {
 # $1: cookie file
 # $2: rapidgator (delete) link
 rapidgator_delete() {
-    eval "$(process_options rapidgator "$MODULE_RAPIDGATOR_DELETE_OPTIONS" "$@")"
-
     local -r COOKIE_FILE=$1
     local -r URL=$2
     local -r BASE_URL='http://rapidgator.net'
