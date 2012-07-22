@@ -71,7 +71,7 @@ declare -r ERR_FATAL_MULTIPLE=100         # 100 + (n) with n = first error code 
 # $1: filename
 logcat_report() {
     if test -s "$1"; then
-        test $(verbose_level) -ge 4 && \
+        test $VERBOSE -ge 4 && \
             stderr "$(sed -e 's/^/rep:/' "$1")"
     fi
     return 0
@@ -79,23 +79,23 @@ logcat_report() {
 
 # This should not be called within modules
 log_report() {
-    test $(verbose_level) -ge 4 && stderr "rep: $@"
+    test $VERBOSE -ge 4 && stderr "rep: $@"
     return 0
 }
 
 log_debug() {
-    test $(verbose_level) -ge 3 && stderr "dbg: $@"
+    test $VERBOSE -ge 3 && stderr "dbg: $@"
     return 0
 }
 
 # This should not be called within modules
 log_notice() {
-    test $(verbose_level) -ge 2 && stderr "$@"
+    test $VERBOSE -ge 2 && stderr "$@"
     return 0
 }
 
 log_error() {
-    test $(verbose_level) -ge 1 && stderr "$@"
+    test $VERBOSE -ge 1 && stderr "$@"
     return 0
 }
 
@@ -131,9 +131,9 @@ curl() {
 
     # No verbose unless debug level; don't show progress meter for report level too
     if [ "${FUNCNAME[1]}" = 'curl_with_log' ]; then
-        test $(verbose_level) -eq 0 && OPTIONS[${#OPTIONS[@]}]='--silent'
+        test $VERBOSE -eq 0 && OPTIONS[${#OPTIONS[@]}]='--silent'
     else
-        test $(verbose_level) -ne 3 && OPTIONS[${#OPTIONS[@]}]='--silent'
+        test $VERBOSE -ne 3 && OPTIONS[${#OPTIONS[@]}]='--silent'
     fi
 
     if test -n "$INTERFACE"; then
@@ -151,7 +151,7 @@ curl() {
         OPTIONS[${#OPTIONS[@]}]=$MIN_LIMIT_RATE
     fi
 
-    if test $(verbose_level) -lt 4; then
+    if test $VERBOSE -lt 4; then
         "$CURL_PRG" "${OPTIONS[@]}" "${CURL_ARGS[@]}" || DRETVAL=$?
     else
         local TEMPCURL=$(create_tempfile)
@@ -1795,8 +1795,9 @@ split_auth() {
 
 # Report list results. Only used by list module functions.
 #
-# $1: links list (one url per line).
+# $1: links list (one url per line)
 # $2: (optional) name list (one filename per line)
+# $3: (optional) link prefix (gets prepended to every link)
 # $?: 0 for success or $ERR_LINK_DEAD
 list_submit() {
     local LINE I
@@ -1813,13 +1814,13 @@ list_submit() {
         while IFS= read -r LINE; do NAMES[I++]=$LINE; done <<< "$2"
 
         for I in "${!LINKS[@]}"; do
-            echo "${LINKS[$I]}"
+            echo "$3${LINKS[$I]}"
             echo "${NAMES[$I]}"
         done
     else
         while IFS= read -r LINE; do
             test "$LINE" || continue
-            echo "$LINE"
+            echo "$3$LINE"
             echo
         done <<< "$1"
     fi
@@ -1903,16 +1904,13 @@ print_module_options() {
     done <<< "$1"
 }
 
-# Get all modules options with specified family name.
-# Note: All lines are prefix with "!" character.
+# Get all modules options with specified family name
 #
 # $1: module name list (one per line)
 # $2: option family name (string, example:UPLOAD)
 get_all_modules_options() {
     while read MODULE; do
-        get_module_options "$MODULE" "$2" | while read OPTION; do
-            if test "$OPTION"; then echo "!$OPTION"; fi
-        done
+        get_module_options "$MODULE" "$2"
     done <<< "$1"
 }
 
@@ -1934,9 +1932,9 @@ get_module() {
 # $1: program name (used for error reporting only)
 # $2: core option list (one per line)
 # $3..$n: arguments
-process_core_options1() {
+process_core_options() {
     local -r NAME=$1
-    local -r OPTIONS=$(echo "$2" | strip | drop_empty_lines)
+    local -r OPTIONS=$(strip_and_drop_empty_lines "$2")
     shift 2
     VERBOSE=1 process_options "$NAME" "$OPTIONS" -1 "$@" || return
 }
@@ -1944,9 +1942,9 @@ process_core_options1() {
 # $1: program name (used for error reporting only)
 # $2: all modules option list (one per line)
 # $3..$n: arguments
-process_core_options2() {
+process_all_modules_options() {
     local -r NAME=$1
-    local -r OPTIONS=$(echo "$2" | strip | drop_empty_lines)
+    local -r OPTIONS=$2
     shift 2
     process_options "$NAME" "$OPTIONS" 0 "$@" || return
 }
@@ -1956,7 +1954,7 @@ process_core_options2() {
 # $3..$n: arguments
 process_module_options() {
     local -r MODULE=$1
-    local -r OPTIONS=$(get_module_options "$1" "$2" | strip | drop_empty_lines)
+    local -r OPTIONS=$(get_module_options "$1" "$2")
     shift 2
     process_options "$MODULE" "$OPTIONS" 1 "$@" || return
 }
@@ -1990,7 +1988,7 @@ process_configfile_options() {
     test -f "$CONFIG" || return 0
 
     # Strip spaces in options
-    OPTIONS=$(echo "$2" | strip | drop_empty_lines)
+    OPTIONS=$(strip_and_drop_empty_lines "$2")
 
     SECTION=$(sed -ne "/\[$1\]/,/^\[/p" -ne "/\[General\]/,/^\[/p" "$CONFIG" | \
               sed -e '/^\(#\|\[\|[[:space:]]*$\)/d')
@@ -2040,8 +2038,7 @@ process_configfile_module_options() {
 
     log_report "use $CONFIG"
 
-    # Strip spaces in options
-    OPTIONS=$(get_module_options "$2" "$3" | strip | drop_empty_lines)
+    OPTIONS=$(get_module_options "$2" "$3")
 
     SECTION=$(sed -ne "/\[$1\]/,/^\[/p" -ne "/\[General\]/,/^\[/p" "$CONFIG" | \
               sed -e '/^\(#\|\[\|[[:space:]]*$\)/d')
@@ -2080,7 +2077,7 @@ process_configfile_module_options() {
 log_report_info() {
     local G
 
-    if test $(verbose_level) -ge 4; then
+    if test $VERBOSE -ge 4; then
         log_report '=== SYSTEM INFO BEGIN ==='
         log_report "[mach] $(uname -a)"
         log_report "[bash] $BASH_VERSION"
@@ -2148,10 +2145,6 @@ captcha_method_translate() {
 ## Private ('static') functions
 ## Can be called from this script only.
 ##
-
-verbose_level() {
-    echo ${VERBOSE:-0}
-}
 
 stderr() {
     echo "$@" >&2
@@ -2374,11 +2367,11 @@ process_options() {
     declare -p UNUSED_OPTS
 }
 
-# Delete blank lines
+# Delete leading and trailing whitespace & blank lines
 # stdin: input (multiline) string
 # stdout: result string
-drop_empty_lines() {
-    sed -e '/^[[:space:]]*$/d'
+strip_and_drop_empty_lines() {
+    sed -e '/^[[:space:]]*$/d; s/^[[:space:]]*//; s/[[:space:]]*$//' <<< "$1"
 }
 
 # Look for a configuration module variable
@@ -2388,7 +2381,7 @@ drop_empty_lines() {
 # stdout: options list (one per line)
 get_module_options() {
     local VAR="MODULE_$(uppercase "$1")_${2}_OPTIONS"
-    echo "${!VAR}"
+    strip_and_drop_empty_lines "${!VAR}"
 }
 
 # Example: 12345 => "3h25m45s"
